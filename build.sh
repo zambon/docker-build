@@ -4,9 +4,9 @@
 set -e
 
 [ $# -ne 1 ] && \
-  echo "Build Docker" && \
+  echo "Build Docker." && echo && \
   echo "    Usage: ${0} <DOCKER_VERSION>" && \
-  echo "  Example: ${0} 1.10.3" && \
+  echo "  Example: ${0} 1.10.3" && echo && \
   exit 1
 
 DOCKER_VERSION="$(echo "$1" | sed -E 's/^v//')"
@@ -20,6 +20,7 @@ BUILD_CONTAINER="docker-build-v$DOCKER_VERSION"
 
 BUILD_TARGET="$(git rev-parse --show-toplevel)/build"
 
+# Get Go-style arch.
 get_arch()
 {
   local arch
@@ -42,6 +43,32 @@ get_arch()
   esac
 }
 export -f get_arch
+
+# Get the right Dockerfile for arch.
+#
+#     Usage: get_dockerfile <GOARCH>
+#   Example: get_dockerfile amd64
+#
+get_dockerfile()
+{
+  local arch="${1:?}"
+  case "$arch" in
+    amd64)
+      echo "Dockerfile"
+      ;;
+    arm)
+      echo "Dockerfile.armhf"
+      ;;
+    ppc64le|s390x)
+      echo "Dockerfile.$arch"
+      ;;
+    *)
+      echo "Unsupported architecture '$arch'"
+      exit 1
+      ;;
+  esac
+}
+export -f get_dockerfile
 
 # Check if Docker is installed and running.
 check_docker()
@@ -86,11 +113,8 @@ build()
   export ARTIFACT_NAME="docker-$DOCKER_VERSION-$ARCH.tgz"
 
   # Prepare build image.
-  if [ "$ARCH" = "amd64" ]; then
-    docker build -t $BUILD_IMAGE -f Dockerfile .
-  else
-    docker build -t $BUILD_IMAGE -f Dockerfile.$ARCH .
-  fi
+  DOCKERFILE="$(get_dockerfile "$ARCH")"
+  docker build -t $BUILD_IMAGE -f $DOCKERFILE .
 
   # Not proud.
   if [ "$ARCH" = "ppc64le" ] && [ "$DOCKER_VERSION" = "1.10.3" ]; then
