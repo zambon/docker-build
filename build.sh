@@ -92,34 +92,51 @@ build()
     docker build -t $BUILD_IMAGE -f Dockerfile.$ARCH .
   fi
 
-
+  # Not proud.
+  if [ "$ARCH" = "ppc64le" ] && [ "$DOCKER_VERSION" = "1.10.3" ]; then
+    BUILD_COMMAND="gccgo"
+  else
+    BUILD_COMMAND="binary"
+  fi
+  export BUILD_COMMAND
 
   docker run \
     --name $BUILD_CONTAINER \
     --privileged -dt \
     -e DOCKER_VERSION \
     -e ARTIFACT_NAME \
+    -e BUILD_COMMAND \
     $BUILD_IMAGE /bin/bash -exc '
 PACKAGE_ROOT=$(mktemp -d)
 mkdir /build
 
 # Build Docker.
-hack/make.sh binary
+hack/make.sh $BUILD_COMMAND
+
+if [ -d bundles/$DOCKER_VERSION/$BUILD_COMMAND ]; then
+  PACKAGE_STRUCTURE=usr/local/bin
+else
+  PACKAGE_STRUCTURE=docker
+fi
+mkdir -p $PACKAGE_ROOT/$PACKAGE_STRUCTURE
 
 # Move artifacts for packaging.
-mkdir $PACKAGE_ROOT/docker
-if [ -d bundles/$DOCKER_VERSION/binary ]; then
-  cp -vL bundles/$DOCKER_VERSION/binary/* $PACKAGE_ROOT/docker
+if [ -d bundles/$DOCKER_VERSION/$BUILD_COMMAND ]; then
+  cp -vL \
+    bundles/$DOCKER_VERSION/$BUILD_COMMAND/* \
+    $PACKAGE_ROOT/$PACKAGE_STRUCTURE
 else
-  cp -vL bundles/$DOCKER_VERSION/binary-{client,daemon}/* $PACKAGE_ROOT/docker
+  cp -vL \
+    bundles/$DOCKER_VERSION/$BUILD_COMMAND-{client,daemon}/* \
+    $PACKAGE_ROOT/$PACKAGE_STRUCTURE
 fi
 
 # Remove symlinks and checksums.
-rm -vf $PACKAGE_ROOT/docker/*{.{sha256,md5},-$DOCKER_VERSION}
+rm -vf $PACKAGE_ROOT/$PACKAGE_STRUCTURE/*{.{sha256,md5},-$DOCKER_VERSION}
 
 # Package.
 pushd $PACKAGE_ROOT
-tar -zcvf $ARTIFACT_NAME docker/*
+tar -zcvf $ARTIFACT_NAME $PACKAGE_STRUCTURE/*
 popd
 
 cp -v $PACKAGE_ROOT/$ARTIFACT_NAME /build
