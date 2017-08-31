@@ -30,7 +30,7 @@ get_arch()
       echo "amd64"
       ;;
     armv6l|armv7l)
-      echo "armhf"
+      echo "arm"
       ;;
     ppc64le|s390x)
       echo "$arch"
