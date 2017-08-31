@@ -135,16 +135,17 @@ fi
 rm -vf $PACKAGE_ROOT/$PACKAGE_STRUCTURE/*{.{sha256,md5},-$DOCKER_VERSION}
 
 # Package.
-pushd $PACKAGE_ROOT
+cd $PACKAGE_ROOT
 tar -zcvf $ARTIFACT_NAME $PACKAGE_STRUCTURE/*
-popd
+cp -v $ARTIFACT_NAME /build
 
-cp -v $PACKAGE_ROOT/$ARTIFACT_NAME /build
-rm -rf $PACKAGE_ROOT
+cd /build
+shasum -a 256 $ARTIFACT_NAME | cut -d " " -f 1 > $ARTIFACT_NAME.sha256
 '
   docker logs -f $BUILD_CONTAINER
   docker wait $BUILD_CONTAINER > /dev/null
   docker cp $BUILD_CONTAINER:/build/$ARTIFACT_NAME $BUILD_TARGET/$ARTIFACT_NAME
+  docker cp $BUILD_CONTAINER:/build/$ARTIFACT_NAME.sha256 $BUILD_TARGET/$ARTIFACT_NAME.sha256
   docker rm -v $BUILD_CONTAINER
 
   echo "Build image left behind:"
