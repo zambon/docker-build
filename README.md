@@ -1,6 +1,6 @@
 # docker-build
 
-Build Docker easily. You'll need Docker though.
+Build Docker easily. You'll need Docker, though.
 
 ## Build
 

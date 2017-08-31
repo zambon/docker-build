@@ -12,16 +12,36 @@ set -e
 DOCKER_VERSION="$(echo "$1" | sed -E 's/^v//')"
 export DOCKER_VERSION
 
-ARCH="$(uname -m)"
-
 DOCKER_REPOSITORY_URL="https://github.com/zambon/moby.git"
 DOCKER_REPOSITORY_PATH="$PWD/build/docker"
 
 BUILD_IMAGE="docker-build:v$DOCKER_VERSION"
 BUILD_CONTAINER="docker-build-v$DOCKER_VERSION"
 
-ARTIFACT_NAME="docker-$DOCKER_VERSION-$ARCH.tgz"
 BUILD_TARGET="$(git rev-parse --show-toplevel)/build"
+
+get_arch()
+{
+  local arch
+  arch="$(uname -m)"
+
+  case "$arch" in
+    x86_64)
+      echo "amd64"
+      ;;
+    armv6l|armv7l)
+      echo "armhf"
+      ;;
+    ppc64le|s390x)
+      echo "$arch"
+      ;;
+    *)
+      echo "Unsupported architecture '$arch'"
+      exit 1
+      ;;
+  esac
+}
+export -f get_arch
 
 # Check if Docker is installed and running.
 check_docker()
@@ -62,15 +82,24 @@ prepare_repo()
 # Down to business.
 build()
 {
+  ARCH="$(get_arch)"
+  export ARTIFACT_NAME="docker-$DOCKER_VERSION-$ARCH.tgz"
+
   # Prepare build image.
-  docker build -t $BUILD_IMAGE -f Dockerfile.$ARCH .
+  if [ "$ARCH" = "amd64" ]; then
+    docker build -t $BUILD_IMAGE -f Dockerfile .
+  else
+    docker build -t $BUILD_IMAGE -f Dockerfile.$ARCH .
+  fi
+
+
 
   docker run \
     --name $BUILD_CONTAINER \
     --privileged -dt \
     -e DOCKER_VERSION \
+    -e ARTIFACT_NAME \
     $BUILD_IMAGE /bin/bash -exc '
-ARCH="$(uname -m)"
 PACKAGE_ROOT=$(mktemp -d)
 mkdir /build
 
@@ -89,7 +118,6 @@ fi
 rm -vf $PACKAGE_ROOT/docker/*{.{sha256,md5},-$DOCKER_VERSION}
 
 # Package.
-ARTIFACT_NAME="docker-$DOCKER_VERSION-$ARCH.tgz"
 pushd $PACKAGE_ROOT
 tar -zcvf $ARTIFACT_NAME docker/*
 popd
